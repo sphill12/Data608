@@ -1,0 +1,449 @@
+---
+title: "Final Exam Data 605"
+author: "Steve Phillips"
+date: "2024-12-13"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r}
+library(MASS)
+library(psych)
+library(moments)
+library(Matrix)
+library(matrixcalc)
+```
+Final Examination
+
+Problem 1: Business Rick and Revenue Modeling
+
+Part 1: Empirical and Theoretical Analysis of Distributions
+
+```{r}
+retail_df <- read.csv("synthetic_retail_data.csv")
+```
+
+```{r}
+head(retail_df)
+```
+The shape and rate of the distribution of the sales variable will be:
+
+```{r}
+cat("Gamma Distribution Parameters for Sales:\n")
+sales_gamma <- fitdistr(retail_df$Sales,"gamma")
+sales_gamma
+```
+The parameters for the lognormal distribution of inventory levels will be:
+
+```{r}
+inventory_fit <- fitdistr(retail_df$Inventory_Levels,"lognormal")
+cat("Lognormal Distribution Parameters for Inventory Levels:\n")
+print(inventory_fit)
+```
+
+
+```{r}
+lead_mean <- mean(retail_df$Lead_Time_Days)
+lead_sd <-  sd(retail_df$Lead_Time_Days)
+paste("The mean lead time will be", round(lead_mean, 5))
+paste("The standard deviation of lead time will be", round(lead_sd,5) )
+
+```
+
+
+2.)Calculate Empirical Expected Value and Variance:
+
+
+Sales:
+
+
+```{r}
+mean_sales_emp <- mean(retail_df$Sales)
+variance_sales_emp <- var(retail_df$Sales)
+
+sales_shape <- sales_gamma$estimate["shape"]
+sales_scale <- sales_gamma$estimate["rate"]
+
+mean_sales_theo <- sales_shape/sales_scale
+var_sales_theo <- sales_shape/ (sales_scale^2)
+
+print(mean_sales_emp)
+print(mean_sales_theo)
+
+print(variance_sales_emp)
+print(var_sales_theo)
+```
+```{r}
+## Empirical for sales
+mean_sales_emp <- mean(retail_df$Sales)
+var_sales_emp <- var(retail_df$Sales)
+
+## Empirical inventory
+mean_inv_emp <- mean(retail_df$Inventory_Levels)
+var_inv_emp <- var(retail_df$Inventory_Levels)
+
+## Empirical Lead Time
+mean_lead_emp <- mean(retail_df$Lead_Time_Days)
+var_lead_emp <- var(retail_df$Lead_Time_Days)
+
+```
+
+```{r}
+## Theoretical Sales:
+
+## The mean will be shape divided by rate
+mean_sales_theo <- sales_gamma$estimate["shape"]/sales_gamma$estimate["rate"]
+## The variance will be shape / rate^2
+var_sales_theo <- sales_gamma$estimate["shape"] / (sales_gamma$estimate["rate"]^2)
+
+
+## Theoretical Inventory
+sd_log <- inventory_fit$estimate["sdlog"]
+mean_log <- inventory_fit$estimate["meanlog"]
+
+mean_inv_theo <- exp(mean_log + (sd_log^2/2))
+var_inv_theo <- (exp(sd_log^2)-1) * exp(2*mean_log + sd_log^2)
+
+## Theoretical Lead Time
+mean_lead_theo <- mean(retail_df$Lead_Time_Days)
+var_lead_theo <- lead_sd^2
+```
+
+```{r}
+results <- data.frame(Variable =c("Sales", "Inventory Levels", "Lead Time"), Empirical_Mean =c(mean_sales_emp, mean_inv_emp, mean_lead_emp), Empirical_Variance = c(var_sales_emp, var_inv_emp, var_lead_emp),Theoretical_Mean = c(mean_sales_theo, mean_inv_theo, mean_lead_theo), Theoretical_Variance = c(var_sales_theo, var_inv_theo, var_lead_theo))
+
+results
+```
+
+All estimates are reasonable approximations
+
+
+Part 2: Probability Analysis and Independence Testing
+
+Task 1: Empirical Probabilities
+
+
+
+$$
+P(Z > \mu \,|\, Z > \mu - \sigma)
+$$
+
+
+```{r}
+thresh <- lead_mean- lead_sd
+dist <- 1- pnorm(thresh,mean =lead_mean, sd= lead_sd)
+prob<- 0.5 / dist
+print("Empirical Probability #1 will be:")
+prob
+```
+
+
+$$
+P(Z > \mu + \sigma\,|\, Z > \mu)
+$$
+
+```{r}
+thresh <- lead_mean + lead_sd
+
+dist <- 1-pnorm(thresh, mean = lead_mean, sd = lead_sd)
+prob <- dist/0.5
+print("Empirical Probability #2 will be:")
+print(prob)
+```
+
+$$
+P(Z > \mu + 2\sigma\,|\, Z > \mu)
+$$
+
+
+
+```{r}
+thresh <- lead_mean + (2 * lead_sd)
+dist <- 1- pnorm(thresh, mean = lead_mean , sd = lead_sd)
+prob <- dist / 0.5
+print("Empirical Probability #3 will be:")
+print(prob)
+```
+
+2.)  correlation and Independence:
+
+
+```{r}
+x <- retail_df$Sales
+y<- retail_df $Price
+cor(x,y)
+
+```
+There appears to be a very weak correlation between sales and price
+
+Find quantiles:
+
+```{r}
+sales_quartile <- cut(x,quantile(x, seq(0,1,0.25), include.lowest =TRUE), labels = c("Q1","Q2","Q3", "Q4"))
+price_quartile <- cut(y,quantile(y, seq(0,1,0.25), include.lowest =TRUE), labels = c("Q1","Q2","Q3", "Q4"))
+
+table <- table(sales_quartile, price_quartile)
+print("Contingency Table:")
+table
+```
+```{r}
+rows <- margin.table(table, 1)
+cols <- margin.table(table,2)
+total <- sum(table)
+
+marginal_sales <- rows/ total
+marginal_price <- cols/ total
+
+joint <- table/ total
+```
+
+```{r}
+print("Marginal Sales Probabilities")
+marginal_sales
+```
+```{r}
+print("Marginal Price Probabilities")
+marginal_price
+```
+```{r}
+print("Joint Probabilities")
+joint
+```
+```{r}
+fisher.test(table, workspace  = 2e8)
+```
+```{r}
+chisq.test(table)
+```
+The null hypothesis for these tests is that there is no correlation between the two variables, while the alternate hypothesis is that there is. Our P-value is about 0.839, meaning that we should not reject the null hypothesis, and that the variables are not correlated. The Chi-square test is used when the sample is large, while the fisher's exact test is used when the sample is small. The reason for this is that the chi squared test approximates the test statistic as a chi-squared distribution which becomes more accurate as sample size increases (uses central limit theorem), while the fishers exact test uses exact probabilities which can be computationally intensive for larger data sets.The rule for what test is selected is based on the expected number of values in one of the cells of the contingency table. If you expect to see less than 5 values then the Fisher's exact test is appropriate, and more than this means that the Chi-square test will be appropriate.We can check the expected values below:
+
+```{r}
+chisq.test(table)$expected
+```
+
+
+We see more than 5 expected values in our contingency table, so the chi-squared will be used.
+
+
+
+Problem 2: Advanced Forecasting and Optimization (calculus)in Retail
+
+Part 1: Descriptive and Inferential Statistics for Inventory Data
+
+Task 1: Inventory Data Analysis:
+
+```{r}
+
+psych::describe(data.matrix(retail_df$Inventory_Levels))
+```
+```{r}
+psych::describe(data.matrix(retail_df$Sales))
+```
+
+
+```{r}
+par(mfrow = c(1,3))
+hist(data.matrix(retail_df$Sales) , main ="Histogram of Sales",xlab ="Values",col = "lightblue", border="white")
+hist(data.matrix(retail_df$Inventory_Levels), main ="Histogram of Inventory Levels",xlab ="Values",col = "lightgreen", border="white")
+hist(data.matrix(retail_df$Price), main ="Histogram of Price",xlab ="Values",col = "lightpink", border="white")
+```
+```{r}
+imp_columns <- retail_df[,c("Sales", "Price", "Inventory_Levels")]
+```
+
+
+```{r, fig.width = 8 , fig.height= 8}
+par(mfrow = c(2,2))
+plot(imp_columns$Sales, imp_columns$Price, main = "Sales vs. Price", xlab = "Sales", ylab = "Price", col= "blue")
+plot(imp_columns$Sales, imp_columns$Inventory_Levels, main = "Sales vs. Inventory Level", xlab = "Sales", ylab = "Inventory Level", col= "green")
+plot(imp_columns$Price, imp_columns$Inventory_Levels, main = "Price vs. Inventory Level", xlab = "Price", ylab = "Inventory Level", col= "red")
+```
+```{r}
+correlation_matrix <- cor(imp_columns)
+print(correlation_matrix)
+```
+Use Corr Test to determine if the correlation is 0: 
+
+```{r}
+cor_sales_price <- cor.test(imp_columns$Sales, imp_columns$Price)
+
+cor_sales_inv <- cor.test(imp_columns$Sales, imp_columns$Inventory_Levels)
+
+cor_price_inv <- cor.test(imp_columns$Price, imp_columns$Inventory_Levels)
+```
+
+```{r}
+print(cor_sales_price)
+print(cor_sales_inv)
+print(cor_price_inv)
+```
+The 95% confidence intervals:
+
+Sales and Price:
+```{r}
+cor_sales_price$conf.int
+```
+Sales and Inventory:
+```{r}
+cor_sales_inv$conf.int
+```
+Price and Inventory:
+```{r}
+cor_price_inv$conf.int
+```
+Discussion:
+
+These findings imply that there is no strong evidence of a correlation between any of our three values. All of our p values are large, meaning that we shouldn't reject the null hypothesis of no correlation. Our 95% confidence intervals for the correlation between all of the variables include 0, meaning that the true correlation could be zero. This has the implication that these variables may be ineffective for optimizing the inventory of the retail chain, as it seems that they won't explain much/any of the variance in inventory levels. While multicollinearity is an important consideration in regression models, I would not be concerned for a model that uses these variables. This is because multiple tests that have been conducted have indicated that the multicollinearity doesn't exist. A model that contains multicollinearity can be problematic for a variety of reasons. Multicolinearity makes it difficult to determine what variable is responsible for explaining the variance in the response, increases standard error in regression coefficients resulting in higher p values (making it hard to tell which predictor is significant).
+
+Part 2: Linear Algebra and Pricing Strategy
+
+Task 1. Price Elasticity and Demand:
+
+
+
+```{r}
+model <- lm(Sales ~ Price, data = retail_df)
+```
+
+```{r}
+summary(model)
+```
+```{r}
+retail_df
+```
+
+```{r}
+correlation_matrix1 <- cor(retail_df[,c("Sales", "Price")])
+correlation_matrix1
+```
+```{r}
+precision_matrix <- solve(correlation_matrix1)
+print(precision_matrix)
+```
+A variance inflation factor is a tool that is generally used to identify multicollinearity between independent variables in a regression model. A VIF of 1 implies that variables are not correlated, a value between 1 and 5 implies moderate correlation, while a VIF greater than 5 impies highly correlated variables. Our VIF is 1.0106655  which is essentially equal to 1, telling us that the variables are not correlated.
+
+LU Decomposition:
+
+```{r}
+lu_decomp <- lu.decomposition(correlation_matrix1)
+
+lu_decomp
+```
+
+
+Task 2: Discussion
+
+
+Our sales data has a rightward skew
+
+```{r}
+skewness(retail_df$Sales)
+
+```
+
+```{r}
+exp_sales <- fitdistr(retail_df$Sales,"exponential")
+exp_sales
+rate <- exp_sales$estimate
+```
+```{r}
+exp_sales[1]
+```
+
+```{r}
+sample <- rexp(1000 , rate = rate)
+```
+
+```{r}
+par(mfrow = c(1,2))
+hist(sample, main = "Histogram of Generated Sample Data",breaks = 30, xlab=  "Value", col  = "lightblue")
+hist(retail_df$Sales, main ="Histogram of Sales Data", breaks = 30,xlab = "Value", col = "lightgreen")
+```
+
+The CDF is given by:
+$$
+F(x) = 
+1 - e^{-\lambda x} 
+$$
+after solving for x, the percentiles can be acquired. The 5th percentile will be:
+
+
+```{r}
+-log(1-0.05)/rate
+```
+
+
+The 95th Percentile will be: 
+
+```{r}
+-log(1-0.95)/rate
+```
+
+95% Confidence Interval with a normality assumption:
+
+To do this, the mean must be calculated and then 1.96 times the standard error (σ/√n) must be added and subtracted to the mean
+
+```{r}
+mean <- mean(retail_df$Sales)
+sd <- sd(retail_df$Sales)
+n <- length(retail_df$Sales)
+z<- 1.96
+
+lower <- mean - z * (sd/sqrt(n))
+upper <- mean + z * (sd/sqrt(n))
+
+
+## now compute empirical percentiles
+
+lower_emp <- quantile(retail_df$Sales, 0.025)
+
+upper_emp <- quantile(retail_df$Sales,0.975)
+
+lower
+upper
+
+lower_emp
+
+upper_emp
+```
+
+
+Part 4: Regression Modeling for Inventory Optimization
+
+task 1 Multiple Regression Model:
+
+```{r}
+mr_model <- lm(Inventory_Levels ~ Sales + Lead_Time_Days + Price, data=retail_df)
+
+summary(mr_model)
+```
+```{r}
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
